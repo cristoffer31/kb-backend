@@ -77,17 +77,69 @@
 # - NO_PROXY: A comma separated lists of hosts, IP addresses or domains that can be
 #   accessed directly. (example: "foo.example.com,bar.example.com")
 #
-###
-FROM registry.access.redhat.com/ubi9/openjdk-21:1.23
+
+
+#--------------------------------------------------------------------------------
+# ###
+# FROM registry.access.redhat.com/ubi9/openjdk-21:1.23
+
+# ENV LANGUAGE='en_US:en'
+
+
+# # We make four distinct layers so if there are application changes the library layers can be re-used
+# COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
+# COPY --chown=185 target/quarkus-app/*.jar /deployments/
+# COPY --chown=185 target/quarkus-app/app/ /deployments/app/
+# COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
+
+# EXPOSE 8080
+# USER 185
+# ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+# ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+
+# ENTRYPOINT [ "/opt/jboss/container/java/run/run-java.sh" ]
+
+
+#----------------------------------------------------------------------------------------------
+
+
+####
+# Esta Dockerfile es "Multi-Stage": 
+# 1. Primero compila el proyecto usando Maven dentro de Docker.
+# 2. Luego crea la imagen final ligera para ejecutarlo.
+####
+
+# --- ETAPA 1: COMPILACIÓN (BUILD) ---
+FROM registry.access.redhat.com/ubi9/openjdk-21:1.20 AS build
+USER root
+WORKDIR /code
+
+# Copiar archivos de configuración de Maven
+COPY mvnw /code/mvnw
+COPY .mvn /code/.mvn
+COPY pom.xml /code/
+
+# Copiar el código fuente
+COPY src /code/src
+
+# Dar permisos de ejecución al script mvnw
+RUN chmod +x mvnw
+
+# Compilar el proyecto (crear la carpeta target)
+# Se salta los tests para hacerlo más rápido en despliegue
+RUN ./mvnw package -DskipTests
+
+# --- ETAPA 2: EJECUCIÓN (RUNTIME) ---
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.20
 
 ENV LANGUAGE='en_US:en'
 
-
-# We make four distinct layers so if there are application changes the library layers can be re-used
-COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
-COPY --chown=185 target/quarkus-app/*.jar /deployments/
-COPY --chown=185 target/quarkus-app/app/ /deployments/app/
-COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
+# Copiamos lo que se generó en la etapa anterior (build)
+# Nota: Quarkus por defecto usa formato 'fast-jar' en target/quarkus-app/
+COPY --from=build --chown=185 /code/target/quarkus-app/lib/ /deployments/lib/
+COPY --from=build --chown=185 /code/target/quarkus-app/*.jar /deployments/
+COPY --from=build --chown=185 /code/target/quarkus-app/app/ /deployments/app/
+COPY --from=build --chown=185 /code/target/quarkus-app/quarkus/ /deployments/quarkus/
 
 EXPOSE 8080
 USER 185
@@ -95,4 +147,3 @@ ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=or
 ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
 
 ENTRYPOINT [ "/opt/jboss/container/java/run/run-java.sh" ]
-
