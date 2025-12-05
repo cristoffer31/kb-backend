@@ -4,15 +4,23 @@ import com.kbcollection.dto.LoginDTO;
 import com.kbcollection.entity.Usuario;
 import io.smallrye.jwt.build.Jwt;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import javax.crypto.spec.SecretKeySpec;
+import java.security.Key;
+import java.nio.charset.StandardCharsets;
 
 import java.time.Duration;
-import java.util.HashSet; // <--- IMPORTANTE
+import java.util.HashSet;
 import java.util.Set;
 
 import at.favre.lib.crypto.bcrypt.BCrypt;
 
 @ApplicationScoped
 public class AuthService {
+
+    @ConfigProperty(name = "JWT_SECRET")
+    String jwtSecret;
 
     public String login(LoginDTO dto) {
         System.out.println("🔍 INTENTO LOGIN: " + dto.email);
