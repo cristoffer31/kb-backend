@@ -202,4 +202,21 @@ public class AuthResource {
             return Response.status(500).entity(Map.of("error", "Error al actualizar perfil")).build();
         }
     }
+
+    }
+
+    // --- ENDPOINT DE EMERGENCIA (Bypass Email) ---
+    @GET
+    @Path("/manual-verify/{email}")
+    @Transactional
+    public Response manualVerify(@PathParam("email") String email) {
+        Usuario u = Usuario.find("email", email).firstResult();
+        if (u == null)
+            return Response.status(404).entity("Usuario no encontrado").build();
+
+        u.verificado = true;
+        u.persist();
+
+        return Response.ok("✅ Usuario " + email + " verificado manualmente. Ya puedes hacer Login.").build();
+    }
 }
