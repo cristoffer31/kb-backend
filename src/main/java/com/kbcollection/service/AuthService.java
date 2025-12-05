@@ -61,23 +61,19 @@ public class AuthService {
         // validador).
         // IMPORTANTE: El JWT_SECRET en Railway DEBE tener 32+ caracteres (256 bits)
         // para HS256.
-        // GENERACIÓN MANUAL DE CLAVE (Estándar Base64)
-        // Quarkus interpreta 'mp.jwt.verify.publickey' como Base64 en modo Raw.
-        // Por tanto, debemos decodificar el String Base64 para obtener los bytes
-        // reales.
-        try {
-            byte[] encodedKey = java.util.Base64.getDecoder().decode(jwtSecret);
-            SecretKey key = new SecretKeySpec(encodedKey, "HmacSHA256");
+        // GENERACIÓN MANUAL DE CLAVE (Robustez alineada)
+        // Quarkus (smallrye.jwt.verify.key) lee el secreto como Raw String por defecto.
+        // Para que coincida la firma, usamos el secreto tal cual (sin decodificar
+        // Base64).
+        // Esto funciona perfecto aunque la cadena sea Base64 (será una clave de ~44
+        // bytes).
+        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
 
-            return Jwt
-                    .issuer("kbcollection")
-                    .upn(u.email)
-                    .groups(roles)
-                    .expiresIn(Duration.ofHours(4))
-                    .sign(key);
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException(
-                    "CRÍTICO: El JWT_SECRET en Railway NO es un Base64 válido. Debe ser generado correctamente.");
-        }
+        return Jwt
+                .issuer("kbcollection")
+                .upn(u.email)
+                .groups(roles)
+                .expiresIn(Duration.ofHours(4))
+                .sign(key);
     }
 }
