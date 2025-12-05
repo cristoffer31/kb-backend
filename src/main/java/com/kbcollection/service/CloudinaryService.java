@@ -26,14 +26,14 @@ public class CloudinaryService {
         try {
             // Conexión con Cloudinary
             Cloudinary cloudinary = new Cloudinary(ObjectUtils.asMap(
-                "cloud_name", cloudName,
-                "api_key", apiKey,
-                "api_secret", apiSecret,
-                "secure", true
-            ));
+                    "cloud_name", cloudName,
+                    "api_key", apiKey,
+                    "api_secret", apiSecret,
+                    "secure", true));
 
             // Subir el archivo
-            Map uploadResult = cloudinary.uploader().upload(archivo, ObjectUtils.emptyMap());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(archivo, ObjectUtils.emptyMap());
 
             // Retornar la URL segura (https)
             return (String) uploadResult.get("secure_url");
