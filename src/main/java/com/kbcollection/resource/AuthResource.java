@@ -45,12 +45,11 @@ public class AuthResource {
         try {
             String token = authService.login(dto);
             Usuario u = Usuario.find("email", dto.email).firstResult();
-            
+
             // Devolvemos token y usuario
             return Response.ok(Map.of(
-                "token", token,
-                "usuario", u 
-            )).build();
+                    "token", token,
+                    "usuario", u)).build();
         } catch (RuntimeException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", e.getMessage()))
@@ -64,7 +63,7 @@ public class AuthResource {
         try {
             Usuario u = usuarioService.registrar(dto);
             emailService.enviarVerificacion(u.email, u.tokenVerificacion);
-            
+
             return Response.status(Response.Status.CREATED)
                     .entity(Map.of("mensaje", "Registro exitoso. Revisa tu correo para activar la cuenta."))
                     .build();
@@ -75,13 +74,13 @@ public class AuthResource {
 
     @GET
     @Path("/me")
-    @RolesAllowed({"ADMIN", "USER"})
+    @RolesAllowed({ "ADMIN", "USER" })
     public Response me(@HeaderParam("Authorization") String authHeader) {
         try {
             String token = authHeader.substring("Bearer ".length());
             String email = parser.parse(token).getName();
             Usuario u = Usuario.find("email", email).firstResult();
-            
+
             return u != null ? Response.ok(u).build() : Response.status(401).build();
         } catch (Exception e) {
             return Response.status(401).build();
@@ -97,20 +96,41 @@ public class AuthResource {
         }
         return Response.status(400).entity(Map.of("error", "Token inválido o expirado")).build();
     }
-    
+
+    // RECUPERACIÓN DE CONTRASEÑA
     // RECUPERACIÓN DE CONTRASEÑA
     @POST
     @Path("/forgot-password")
     @Transactional
     public Response forgotPassword(Map<String, String> body) {
-        String email = body.get("email");
-        Usuario u = Usuario.find("email", email).firstResult();
-        if (u != null) {
-            u.tokenRecuperacion = UUID.randomUUID().toString();
-            u.persist();
-            emailService.enviarRecuperacion(u.email, u.tokenRecuperacion);
+        System.out.println("🔍 Intentando forgot-password...");
+        try {
+            String email = body.get("email");
+            System.out.println("📧 Email recibido: " + email);
+
+            if (email == null || email.isBlank()) {
+                System.out.println("❌ El email es nulo o vacío");
+                return Response.status(400).entity(Map.of("error", "Email requerido")).build();
+            }
+
+            Usuario u = Usuario.find("email", email).firstResult();
+            if (u != null) {
+                System.out.println("✅ Usuario encontrado: " + u.id);
+                u.tokenRecuperacion = UUID.randomUUID().toString();
+                u.persist(); // Guardar token
+                System.out.println("💾 Token guardado en DB. Enviando correo...");
+
+                emailService.enviarRecuperacion(u.email, u.tokenRecuperacion);
+                System.out.println("🚀 Correo enviado (o intento realizado).");
+            } else {
+                System.out.println("⚠️ Usuario no encontrado para ese email.");
+            }
+            return Response.ok(Map.of("mensaje", "Si existe, se enviaron instrucciones.")).build();
+        } catch (Exception e) {
+            System.out.println("🔥 ERROR CRÍTICO EN FORGOT-PASSWORD:");
+            e.printStackTrace(); // Esto saldrá en los logs de Railway
+            return Response.status(500).entity(Map.of("error", "Error interno: " + e.getMessage())).build();
         }
-        return Response.ok(Map.of("mensaje", "Si existe, se enviaron instrucciones.")).build();
     }
 
     @POST
@@ -120,27 +140,29 @@ public class AuthResource {
         String token = body.get("token");
         String newPassword = body.get("password");
         Usuario u = Usuario.find("tokenRecuperacion", token).firstResult();
-        
-        if (u == null) return Response.status(400).entity(Map.of("error", "Token inválido")).build();
+
+        if (u == null)
+            return Response.status(400).entity(Map.of("error", "Token inválido")).build();
 
         u.passwordHash = BCrypt.withDefaults().hashToString(12, newPassword.toCharArray());
         u.tokenRecuperacion = null;
         u.persist();
         return Response.ok(Map.of("mensaje", "Contraseña actualizada")).build();
     }
-    
+
     // ACTUALIZAR PERFIL
     @PUT
     @Path("/me")
-    @RolesAllowed({"ADMIN", "USER"})
+    @RolesAllowed({ "ADMIN", "USER" })
     @Transactional
     public Response updateProfile(@HeaderParam("Authorization") String authHeader, Map<String, String> body) {
         try {
             String token = authHeader.substring("Bearer ".length());
             String emailToken = parser.parse(token).getName();
             Usuario u = Usuario.find("email", emailToken).firstResult();
-            
-            if (u == null) return Response.status(401).build();
+
+            if (u == null)
+                return Response.status(401).build();
 
             if (body.containsKey("nombre") && !body.get("nombre").isBlank()) {
                 u.nombre = body.get("nombre");
@@ -154,7 +176,7 @@ public class AuthResource {
                 if (!BCrypt.verifyer().verify(currentPassword.toCharArray(), u.passwordHash).verified) {
                     return Response.status(400).entity(Map.of("error", "La contraseña actual es incorrecta")).build();
                 }
-                
+
                 String newPass = body.get("password");
                 if (newPass.length() < 6) {
                     return Response.status(400).entity(Map.of("error", "Mínimo 6 caracteres")).build();
@@ -163,7 +185,7 @@ public class AuthResource {
             }
 
             u.persist();
-            u.passwordHash = null; 
+            u.passwordHash = null;
             return Response.ok(u).build();
 
         } catch (Exception e) {
