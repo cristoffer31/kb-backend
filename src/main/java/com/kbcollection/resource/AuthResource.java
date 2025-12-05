@@ -107,7 +107,6 @@ public class AuthResource {
     // NO @Transactional para evitar timeout por correo lento
     public Response forgotPassword(Map<String, String> body) {
 
-    public Response forgotPassword(Map<String, String> body) {
         try {
             String email = body.get("email");
 
