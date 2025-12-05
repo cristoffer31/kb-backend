@@ -15,26 +15,35 @@ import at.favre.lib.crypto.bcrypt.BCrypt;
 public class AuthService {
 
     public String login(LoginDTO dto) {
+        System.out.println("🔍 INTENTO LOGIN: " + dto.email);
         Usuario u = Usuario.find("email", dto.email).firstResult();
 
         if (u == null) {
+            System.out.println("❌ LOGIN FALLO: Usuario null");
             throw new RuntimeException("Usuario o contraseña incorrectos");
         }
+        System.out.println("✅ Usuario encontrado: " + u.email + " | Activo: " + u.activo + " | Verificado: "
+                + u.verificado + " | Rol: " + u.role);
 
         // 1. Bloqueo Anti-Fraude (Si está inactivo o no verificado)
         if (!u.activo) {
+            System.out.println("❌ LOGIN FALLO: Usuario inactivo");
             throw new RuntimeException("⛔ Tu cuenta ha sido bloqueada.");
         }
-        
-        // Excepción: Los ADMIN y SUPER_ADMIN pueden entrar sin verificar correo si quieres
+
+        // Excepción: Los ADMIN y SUPER_ADMIN pueden entrar sin verificar correo si
+        // quieres
         if (!u.verificado && !u.role.contains("ADMIN")) {
+            System.out.println("❌ LOGIN FALLO: No verificado");
             throw new RuntimeException("Debes verificar tu correo electrónico.");
         }
 
         BCrypt.Result res = BCrypt.verifyer().verify(dto.password.toCharArray(), u.passwordHash);
         if (!res.verified) {
+            System.out.println("❌ LOGIN FALLO: Password incorrecto. hashDB=" + u.passwordHash);
             throw new RuntimeException("Usuario o contraseña incorrectos");
         }
+        System.out.println("✅ Password correcto. Generando Token...");
 
         // --- CORRECCIÓN CLAVE: GESTIÓN DE ROLES ---
         Set<String> roles = new HashSet<>();
