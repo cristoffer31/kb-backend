@@ -35,10 +35,6 @@ public class AuthResource {
     @Inject
     JWTParser parser;
 
-    // ---------------------------------------------------------
-    // ¡OJO! AQUÍ BORRAMOS LOS MÉTODOS @OPTIONS QUE CAUSABAN EL ERROR
-    // ---------------------------------------------------------
-
     @POST
     @Path("/login")
     public Response login(LoginDTO dto) {
@@ -49,7 +45,8 @@ public class AuthResource {
             // Devolvemos token y usuario
             return Response.ok(Map.of(
                     "token", token,
-                    "usuario", u)).build();
+                    "usuario", u != null ? u : "Usuario no encontrado" // Safety check although login succeeds
+            )).build();
         } catch (RuntimeException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", e.getMessage()))
@@ -62,7 +59,13 @@ public class AuthResource {
     public Response register(@Valid RegisterDTO dto) {
         try {
             Usuario u = usuarioService.registrar(dto);
-            emailService.enviarVerificacion(u.email, u.tokenVerificacion);
+            // Intentar enviar correo, pero no fallar el registro si el correo falla (ya que
+            // el usuario ya se creó)
+            try {
+                emailService.enviarVerificacion(u.email, u.tokenVerificacion);
+            } catch (Exception e) {
+                System.out.println("⚠️ Error enviando correo de verificación: " + e.getMessage());
+            }
 
             return Response.status(Response.Status.CREATED)
                     .entity(Map.of("mensaje", "Registro exitoso. Revisa tu correo para activar la cuenta."))
@@ -94,6 +97,56 @@ public class AuthResource {
         if (usuarioService.verificarCuenta(body.get("token"))) {
             return Response.ok(Map.of("mensaje", "Cuenta verificada correctamente")).build();
         }
+        return Response.status(400).entity(Map.of("error", "Token inválido o expirado")).build();
+    }
+
+    // MAPEO API CORRECTO PARA FORGOT PASSWORD
+    @POST
+    @Path("/forgot-password")
+    // NO @Transactional para evitar timeout por correo lento
+    public Response forgotPassword(Map<String, String> body) {
+        System.out.println("🔍 Intentando forgot-password...");
+        try {
+            String email = body.get("email");
+
+            // 1. Operación de BD rápida (Crear token)
+            String token = generarTokenRecuperacion(email);
+
+            if (token != null) {
+                // 2. Operación lenta (Enviar correo) - FUERA de la transacción
+                System.out.println("💾 Token guardado. Intentando enviar correo...");
+                emailService.enviarRecuperacion(email, token);
+                System.out.println("🚀 Correo enviado.");
+            } else {
+                System.out.println("⚠️ Usuario no encontrado o error generando token.");
+            }
+
+            return Response.ok(Map.of("mensaje", "Si existe, se enviaron instrucciones.")).build();
+        } catch (Exception e) {
+            System.out.println("🔥 ERROR en forgot-password:");
+            e.printStackTrace();
+            return Response.status(500).entity(Map.of("error", "Error interno")).build();
+        }
+    }
+
+    // Método auxiliar TRANSACCIONAL (sólo toca DB)
+    @Transactional
+    public String generarTokenRecuperacion(String email) {
+        if (email == null || email.isBlank())
+            return null;
+        Usuario u = Usuario.find("email", email).firstResult();
+        if (u != null) {
+            u.tokenRecuperacion = UUID.randomUUID().toString();
+            u.persist();
+            return u.tokenRecuperacion;
+        }
+        return null; // Usuario no encontrado
+    }
+
+    @POST
+    @Path("/reset-password")
+    @Transactional
+    public Response resetPassword(Map<String, String> body) {
         String token = body.get("token");
         String newPassword = body.get("password");
         Usuario u = Usuario.find("tokenRecuperacion", token).firstResult();
