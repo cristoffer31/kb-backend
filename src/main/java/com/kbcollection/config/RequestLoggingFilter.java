@@ -33,6 +33,15 @@ public class RequestLoggingFilter implements ContainerRequestFilter {
             if (authHeader == null) {
                 LOG.info(">>> WARNING: Authorization header is logically NULL via getHeaderString");
             }
+
+            // Verificamos si la seguridad ya procesó el usuario
+            if (requestContext.getSecurityContext() != null
+                    && requestContext.getSecurityContext().getUserPrincipal() != null) {
+                LOG.info(">>> SECURITY CONTEXT: Valid Principal found: "
+                        + requestContext.getSecurityContext().getUserPrincipal().getName());
+            } else {
+                LOG.info(">>> SECURITY CONTEXT: No Principal (Unauthenticated)");
+            }
         }
     }
 }
