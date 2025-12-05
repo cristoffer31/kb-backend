@@ -21,12 +21,17 @@ public class RequestLoggingFilter implements ContainerRequestFilter {
         // Solo logueamos rutas de API para no saturar con health checks, etc.
         if (path.startsWith("/api")) {
             LOG.info(">>> REQUEST: " + method + " " + path);
-            if (authHeader != null) {
-                // Imprimimos solo el inicio del token para seguridad
-                String safeToken = authHeader.length() > 20 ? authHeader.substring(0, 20) + "..." : authHeader;
-                LOG.info(">>> HEADER AUTH: " + safeToken);
-            } else {
-                LOG.info(">>> HEADER AUTH: NULL (No token received)");
+            LOG.info(">>> DUMPING HEADERS:");
+            requestContext.getHeaders().forEach((key, values) -> {
+                String safeValue = key.equalsIgnoreCase("Authorization")
+                        ? (values.isEmpty() ? "EMPTY"
+                                : values.get(0).substring(0, Math.min(values.get(0).length(), 15)) + "...")
+                        : values.toString();
+                LOG.info("   " + key + ": " + safeValue);
+            });
+
+            if (authHeader == null) {
+                LOG.info(">>> WARNING: Authorization header is logically NULL via getHeaderString");
             }
         }
     }
