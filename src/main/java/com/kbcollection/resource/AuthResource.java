@@ -94,49 +94,6 @@ public class AuthResource {
         if (usuarioService.verificarCuenta(body.get("token"))) {
             return Response.ok(Map.of("mensaje", "Cuenta verificada correctamente")).build();
         }
-        return Response.status(400).entity(Map.of("error", "Token inválido o expirado")).build();
-    }
-
-    // RECUPERACIÓN DE CONTRASEÑA
-    // RECUPERACIÓN DE CONTRASEÑA
-    @POST
-    @Path("/forgot-password")
-    @Transactional
-    public Response forgotPassword(Map<String, String> body) {
-        System.out.println("🔍 Intentando forgot-password...");
-        try {
-            String email = body.get("email");
-            System.out.println("📧 Email recibido: " + email);
-
-            if (email == null || email.isBlank()) {
-                System.out.println("❌ El email es nulo o vacío");
-                return Response.status(400).entity(Map.of("error", "Email requerido")).build();
-            }
-
-            Usuario u = Usuario.find("email", email).firstResult();
-            if (u != null) {
-                System.out.println("✅ Usuario encontrado: " + u.id);
-                u.tokenRecuperacion = UUID.randomUUID().toString();
-                u.persist(); // Guardar token
-                System.out.println("💾 Token guardado en DB. Enviando correo...");
-
-                emailService.enviarRecuperacion(u.email, u.tokenRecuperacion);
-                System.out.println("🚀 Correo enviado (o intento realizado).");
-            } else {
-                System.out.println("⚠️ Usuario no encontrado para ese email.");
-            }
-            return Response.ok(Map.of("mensaje", "Si existe, se enviaron instrucciones.")).build();
-        } catch (Exception e) {
-            System.out.println("🔥 ERROR CRÍTICO EN FORGOT-PASSWORD:");
-            e.printStackTrace(); // Esto saldrá en los logs de Railway
-            return Response.status(500).entity(Map.of("error", "Error interno: " + e.getMessage())).build();
-        }
-    }
-
-    @POST
-    @Path("/reset-password")
-    @Transactional
-    public Response resetPassword(Map<String, String> body) {
         String token = body.get("token");
         String newPassword = body.get("password");
         Usuario u = Usuario.find("tokenRecuperacion", token).firstResult();
