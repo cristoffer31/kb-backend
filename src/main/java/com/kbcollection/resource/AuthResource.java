@@ -203,8 +203,6 @@ public class AuthResource {
         }
     }
 
-    }
-
     // --- ENDPOINT DE EMERGENCIA (Bypass Email) ---
     @GET
     @Path("/manual-verify/{email}")
