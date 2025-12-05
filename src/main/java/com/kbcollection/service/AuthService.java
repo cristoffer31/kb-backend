@@ -64,17 +64,22 @@ public class AuthService {
         }
         // ------------------------------------------
 
-        // GENERACIÓN MANUAL DE CLAVE (Evita error SRJWT05028)
-        // Forzamos que el String sea tratado como una clave HMAC pura (HmacSHA256)
-        // nos aseguramos que tenga longitud segura si es posible, pero confiamos en la
-        // inyección.
-        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        // GENERACIÓN MANUAL DE CLAVE (Robustez total)
+        // Solución al error SRJWT05012: La clave era muy corta (216 bits).
+        // Hasheamos el secreto con SHA-256 para obtener SIEMPRE 32 bytes (256 bits).
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(jwtSecret.getBytes(StandardCharsets.UTF_8));
+            SecretKey key = new SecretKeySpec(hash, "HmacSHA256");
 
-        return Jwt
-                .issuer("kbcollection")
-                .upn(u.email)
-                .groups(roles) // Enviamos TODOS los roles
-                .expiresIn(Duration.ofHours(4))
-                .sign(key); // <--- FIRMAMOS CON LA CLAVE MANUALMENTE
+            return Jwt
+                    .issuer("kbcollection")
+                    .upn(u.email)
+                    .groups(roles) // Enviamos TODOS los roles
+                    .expiresIn(Duration.ofHours(4))
+                    .sign(key); // <--- FIRMAMOS CON LA CLAVE MANUALMENTE DE 256 BITS
+        } catch (Exception e) {
+            throw new RuntimeException("Error generando clave JWT: " + e.getMessage());
+        }
     }
 }
