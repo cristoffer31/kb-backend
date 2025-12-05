@@ -8,6 +8,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.annotation.Priority;
 
+import java.util.Set;
+import io.smallrye.jwt.algorithm.SignatureAlgorithm;
+
 @Dependent
 public class JwtConfig {
 
@@ -20,10 +23,15 @@ public class JwtConfig {
     @Priority(1)
     JWTAuthContextInfo getJWTAuthContextInfo() {
         JWTAuthContextInfo contextInfo = new JWTAuthContextInfo();
+
         // Forzamos el uso del secreto inyectado para validación
-        // Esto asegura que FIRMA y VALIDACIÓN usen exactamente la misma cadena
         contextInfo.setSecretKeyContent(jwtSecret);
         contextInfo.setIssuedBy("kbcollection");
+
+        // CRÍTICO: Si no definimos esto, espera RS256 por defecto y rechaza nuestro
+        // token HS256
+        contextInfo.setSignatureAlgorithm(Set.of(SignatureAlgorithm.HS256));
+
         return contextInfo;
     }
 }
