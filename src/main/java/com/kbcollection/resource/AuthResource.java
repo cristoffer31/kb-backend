@@ -48,8 +48,7 @@ public class AuthResource {
                     "usuario", u != null ? u : "Usuario no encontrado" // Safety check although login succeeds
             )).build();
         } catch (RuntimeException e) {
-            System.out.println("🔥 ERROR CRÍTICO EN LOGIN: " + e.getMessage());
-            e.printStackTrace(); // <--- IMPORTANTE PARA VER POR QUÉ FALLA JWT
+            e.printStackTrace();
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
@@ -66,7 +65,7 @@ public class AuthResource {
             try {
                 emailService.enviarVerificacion(u.email, u.tokenVerificacion);
             } catch (Exception e) {
-                System.out.println("⚠️ Error enviando correo de verificación: " + e.getMessage());
+                // Loguear error de email silenciosamente o con logger real si existiera
             }
 
             return Response.status(Response.Status.CREATED)
@@ -107,7 +106,8 @@ public class AuthResource {
     @Path("/forgot-password")
     // NO @Transactional para evitar timeout por correo lento
     public Response forgotPassword(Map<String, String> body) {
-        System.out.println("🔍 Intentando forgot-password...");
+
+    public Response forgotPassword(Map<String, String> body) {
         try {
             String email = body.get("email");
 
@@ -116,16 +116,11 @@ public class AuthResource {
 
             if (token != null) {
                 // 2. Operación lenta (Enviar correo) - FUERA de la transacción
-                System.out.println("💾 Token guardado. Intentando enviar correo...");
                 emailService.enviarRecuperacion(email, token);
-                System.out.println("🚀 Correo enviado.");
-            } else {
-                System.out.println("⚠️ Usuario no encontrado o error generando token.");
             }
 
             return Response.ok(Map.of("mensaje", "Si existe, se enviaron instrucciones.")).build();
         } catch (Exception e) {
-            System.out.println("🔥 ERROR en forgot-password:");
             e.printStackTrace();
             return Response.status(500).entity(Map.of("error", "Error interno")).build();
         }
@@ -205,22 +200,4 @@ public class AuthResource {
         }
     }
 
-    // --- ENDPOINT DE EMERGENCIA (Bypass Email) ---
-    // (Eliminados por limpieza de producción)
-
-    // --- TEMPORAL: PROMOVER A SUPER ADMIN ---
-    @GET
-    @Path("/promote-super-admin/{email}")
-    @Transactional
-    public Response promoteSuperAdmin(@PathParam("email") String email) {
-        Usuario u = Usuario.find("email", email).firstResult();
-        if (u == null)
-            return Response.status(404).entity("Usuario no encontrado").build();
-
-        u.role = "SUPER_ADMIN";
-        u.persist();
-
-        return Response.ok("👑 El usuario " + email + " ahora es SUPER_ADMIN. ¡Haz re-login para ver los cambios!")
-                .build();
-    }
 }
