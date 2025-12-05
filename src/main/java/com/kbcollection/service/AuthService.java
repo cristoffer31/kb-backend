@@ -56,22 +56,18 @@ public class AuthService {
         }
         // ------------------------------------------
 
-        // GENERACIÓN MANUAL DE CLAVE (Robustez total)
-        // Solución al error SRJWT05012: La clave era muy corta (216 bits).
-        // Hasheamos el secreto con SHA-256 para obtener SIEMPRE 32 bytes (256 bits).
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(jwtSecret.getBytes(StandardCharsets.UTF_8));
-            SecretKey key = new SecretKeySpec(hash, "HmacSHA256");
+        // GENERACIÓN MANUAL DE CLAVE (Estándar)
+        // Usamos la clave directa tal cual viene de la configuración (igual que el
+        // validador).
+        // IMPORTANTE: El JWT_SECRET en Railway DEBE tener 32+ caracteres (256 bits)
+        // para HS256.
+        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
 
-            return Jwt
-                    .issuer("kbcollection")
-                    .upn(u.email)
-                    .groups(roles) // Enviamos TODOS los roles
-                    .expiresIn(Duration.ofHours(4))
-                    .sign(key); // <--- FIRMAMOS CON LA CLAVE MANUALMENTE DE 256 BITS
-        } catch (Exception e) {
-            throw new RuntimeException("Error generando clave JWT: " + e.getMessage());
-        }
+        return Jwt
+                .issuer("kbcollection")
+                .upn(u.email)
+                .groups(roles) // Enviamos TODOS los roles
+                .expiresIn(Duration.ofHours(4))
+                .sign(key);
     }
 }

@@ -206,34 +206,5 @@ public class AuthResource {
     }
 
     // --- ENDPOINT DE EMERGENCIA (Bypass Email) ---
-    @GET
-    @Path("/manual-verify/{email}")
-    @Transactional
-    public Response manualVerify(@PathParam("email") String email) {
-        Usuario u = Usuario.find("email", email).firstResult();
-        if (u == null)
-            return Response.status(404).entity("Usuario no encontrado").build();
-
-        u.verificado = true;
-        u.persist();
-
-        return Response.ok("✅ Usuario " + email + " verificado manualmente. Ya puedes hacer Login.").build();
-    }
-
-    // --- ENDPOINT MASTER FIX (Password + Activo + Verificado) ---
-    @GET
-    @Path("/manual-reset/{email}/{newPassword}")
-    @Transactional
-    public Response manualReset(@PathParam("email") String email, @PathParam("newPassword") String newPassword) {
-        Usuario u = Usuario.find("email", email).firstResult();
-        if (u == null)
-            return Response.status(404).entity("Usuario no encontrado").build();
-
-        u.passwordHash = BCrypt.withDefaults().hashToString(12, newPassword.toCharArray());
-        u.verificado = true;
-        u.activo = true;
-        u.persist();
-
-        return Response.ok("✅ MASTER FIX APLICADO: Password cambiada, usuario activo y verificado.").build();
-    }
+    // (Eliminados por limpieza de producción)
 }
