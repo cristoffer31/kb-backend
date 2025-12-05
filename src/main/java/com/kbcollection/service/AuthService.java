@@ -55,11 +55,17 @@ public class AuthService {
         }
         // ------------------------------------------
 
+        // GENERACIÓN MANUAL DE CLAVE (Evita error SRJWT05028)
+        // Forzamos que el String sea tratado como una clave HMAC pura (HmacSHA256)
+        // nos aseguramos que tenga longitud segura si es posible, pero confiamos en la
+        // inyección.
+        Key key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+
         return Jwt
                 .issuer("kbcollection")
                 .upn(u.email)
                 .groups(roles) // Enviamos TODOS los roles
                 .expiresIn(Duration.ofHours(4))
-                .sign();
+                .sign(key); // <--- FIRMAMOS CON LA CLAVE MANUALMENTE
     }
 }
