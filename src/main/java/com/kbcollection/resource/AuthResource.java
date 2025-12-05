@@ -48,6 +48,8 @@ public class AuthResource {
                     "usuario", u != null ? u : "Usuario no encontrado" // Safety check although login succeeds
             )).build();
         } catch (RuntimeException e) {
+            System.out.println("🔥 ERROR CRÍTICO EN LOGIN: " + e.getMessage());
+            e.printStackTrace(); // <--- IMPORTANTE PARA VER POR QUÉ FALLA JWT
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(Map.of("error", e.getMessage()))
                     .build();
