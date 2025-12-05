@@ -207,4 +207,20 @@ public class AuthResource {
 
     // --- ENDPOINT DE EMERGENCIA (Bypass Email) ---
     // (Eliminados por limpieza de producción)
+
+    // --- TEMPORAL: PROMOVER A SUPER ADMIN ---
+    @GET
+    @Path("/promote-super-admin/{email}")
+    @Transactional
+    public Response promoteSuperAdmin(@PathParam("email") String email) {
+        Usuario u = Usuario.find("email", email).firstResult();
+        if (u == null)
+            return Response.status(404).entity("Usuario no encontrado").build();
+
+        u.role = "SUPER_ADMIN";
+        u.persist();
+
+        return Response.ok("👑 El usuario " + email + " ahora es SUPER_ADMIN. ¡Haz re-login para ver los cambios!")
+                .build();
+    }
 }
