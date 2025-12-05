@@ -8,6 +8,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.security.Key;
+import javax.crypto.SecretKey; // <--- NUEVO IMPORT
 import java.nio.charset.StandardCharsets;
 
 import java.time.Duration;
@@ -67,7 +68,7 @@ public class AuthService {
         // Forzamos que el String sea tratado como una clave HMAC pura (HmacSHA256)
         // nos aseguramos que tenga longitud segura si es posible, pero confiamos en la
         // inyección.
-        Key key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
 
         return Jwt
                 .issuer("kbcollection")
