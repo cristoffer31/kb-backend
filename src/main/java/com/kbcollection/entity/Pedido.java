@@ -14,6 +14,9 @@ public class Pedido extends PanacheEntity {
     public double costoEnvio;
     public double total;
 
+     public String telefono;
+
+     
     @Column(length = 50)
     public String metodoPago;
 
@@ -45,4 +48,5 @@ public class Pedido extends PanacheEntity {
 
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL)
     public List<PedidoItem> items;
+    
 }

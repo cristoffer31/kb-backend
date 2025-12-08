@@ -1,18 +1,18 @@
 package com.kbcollection.resource;
 
 import com.kbcollection.dto.ProductoForm;
-import com.kbcollection.entity.Category;
-import com.kbcollection.entity.Producto;
-import com.kbcollection.entity.PrecioMayoreo;
+import com.kbcollection.entity.*;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Path("/api/productos")
@@ -20,15 +20,28 @@ import java.util.Map;
 @Produces(MediaType.APPLICATION_JSON)
 public class ProductoResource {
 
+    // --- 1. LISTAR CON FILTRO DE EMPRESA ---
     @GET
     public Response listar(@QueryParam("page") @DefaultValue("0") int page, 
-                           @QueryParam("size") @DefaultValue("12") int size) {
-        PanacheQuery<Producto> query = Producto.findAll();
-        query.page(io.quarkus.panache.common.Page.of(page, size));
+                           @QueryParam("size") @DefaultValue("12") int size,
+                           @QueryParam("empresaId") Long empresaId) { // <--- NUEVO PARÁMETRO
+        
+        String query = "1=1";
+        Map<String, Object> params = new HashMap<>();
+
+        // Si el frontend pide una empresa específica (ej: /kb), filtramos
+        if (empresaId != null) {
+            query += " AND empresa.id = :empresaId";
+            params.put("empresaId", empresaId);
+        }
+
+        PanacheQuery<Producto> pq = Producto.find(query, params);
+        pq.page(io.quarkus.panache.common.Page.of(page, size));
+        
         return Response.ok(Map.of(
-            "content", query.list(),
-            "totalPages", query.pageCount(),
-            "totalElements", query.count(),
+            "content", pq.list(),
+            "totalPages", pq.pageCount(),
+            "totalElements", pq.count(),
             "currentPage", page
         )).build();
     }
@@ -41,9 +54,13 @@ public class ProductoResource {
         return Producto.find("codigoAgrupador", codigo).list();
     }
 
+    // --- 2. OFERTAS FILTRADAS ---
     @GET
     @Path("/ofertas")
-    public List<Producto> obtenerOfertas() {
+    public List<Producto> obtenerOfertas(@QueryParam("empresaId") Long empresaId) {
+        if (empresaId != null) {
+            return Producto.find("enOferta = true AND empresa.id = ?1", empresaId).list();
+        }
         return Producto.find("enOferta = true").list();
     }
 
@@ -55,11 +72,27 @@ public class ProductoResource {
         return Response.ok(p).build();
     }
 
+    // --- 3. CREAR ASIGNANDO EMPRESA ---
     @POST
     @Transactional
-    @RolesAllowed("ADMIN")
-    public Response crear(ProductoForm form) {
+    @RolesAllowed({"ADMIN", "SUPER_ADMIN"})
+    public Response crear(ProductoForm form, @Context SecurityContext sec) {
+        // Identificar quién está creando el producto
+        String email = sec.getUserPrincipal().getName();
+        Usuario admin = Usuario.find("email", email).firstResult();
+        
         Producto p = new Producto();
+        
+        // Lógica de Asignación Automática
+        if (admin.empresa != null) {
+            // Si el usuario es Admin de "Sabesa", el producto es de "Sabesa"
+            p.empresa = admin.empresa;
+        } else {
+            // Si es Super Admin (empresa null), asignamos KB por defecto o lo que venga en el form
+            // (Aquí podrías agregar lógica para que el Super Admin elija la empresa en el JSON)
+            p.empresa = Empresa.findById(1L); // Fallback a ID 1 (KB Collection)
+        }
+
         mapFormToEntity(form, p);
         p.persist();
         return Response.status(Response.Status.CREATED).entity(p).build();
@@ -68,10 +101,13 @@ public class ProductoResource {
     @PUT
     @Path("/{id}")
     @Transactional
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "SUPER_ADMIN"})
     public Response actualizar(@PathParam("id") Long id, ProductoForm form) {
         Producto p = Producto.findById(id);
         if (p == null) return Response.status(Response.Status.NOT_FOUND).build();
+        
+        // Aquí podrías validar que el admin tenga permiso sobre esta empresa
+        
         mapFormToEntity(form, p);
         return Response.ok(p).build();
     }
@@ -79,7 +115,7 @@ public class ProductoResource {
     @DELETE
     @Path("/{id}")
     @Transactional
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "SUPER_ADMIN"})
     public Response eliminar(@PathParam("id") Long id) {
         boolean deleted = Producto.deleteById(id);
         if (!deleted) return Response.status(Response.Status.NOT_FOUND).build();
@@ -90,10 +126,12 @@ public class ProductoResource {
     @Path("/buscar")
     public Response buscar(
             @QueryParam("nombre") String nombre,
-            @QueryParam("categoriaId") Long categoriaId
+            @QueryParam("categoriaId") Long categoriaId,
+            @QueryParam("empresaId") Long empresaId // <--- FILTRO EN BÚSQUEDA
     ) {
         String query = "1=1";
         Map<String,Object> params = new HashMap<>();
+        
         if (nombre != null && !nombre.isBlank()) {
             query += " AND LOWER(nombre) LIKE :nombre";
             params.put("nombre", "%" + nombre.toLowerCase() + "%");
@@ -102,6 +140,12 @@ public class ProductoResource {
             query += " AND category.id = :categoriaId";
             params.put("categoriaId", categoriaId);
         }
+        // Filtro de empresa en buscador
+        if (empresaId != null) {
+            query += " AND empresa.id = :empresaId";
+            params.put("empresaId", empresaId);
+        }
+        
         List<Producto> resultados = Producto.list(query, params);
         return Response.ok(resultados).build();
     }
@@ -116,7 +160,6 @@ public class ProductoResource {
         p.precioOferta = form.precioOferta != null ? form.precioOferta : 0.0;
         p.enOferta = form.enOferta != null ? form.enOferta : false;
 
-        // --- MAPEO VARIANTES ---
         p.talla = form.talla;
         p.variante = form.variante;
         p.codigoAgrupador = form.codigoAgrupador;

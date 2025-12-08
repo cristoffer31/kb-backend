@@ -2,6 +2,8 @@ package com.kbcollection.resource;
 
 import com.kbcollection.dto.CheckoutRequest;
 import com.kbcollection.entity.*;
+import com.kbcollection.service.TwilioService;
+import io.quarkus.panache.common.Sort;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
@@ -9,7 +11,6 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import io.quarkus.panache.common.Sort;
 
 import java.util.List;
 import java.util.Map;
@@ -22,9 +23,12 @@ public class CheckoutResource {
     @Inject
     SecurityIdentity identity;
 
+    @Inject
+    TwilioService twilioService; // <--- Notificaciones
+
     @GET
     @Path("/mis-pedidos")
-    @RolesAllowed({"USER", "ADMIN"}) 
+    @RolesAllowed({"USER", "ADMIN", "SUPER_ADMIN"}) 
     public Response misPedidos() {
         String email = identity.getPrincipal().getName();
         List<Pedido> pedidos = Pedido.find("usuario.email", Sort.descending("id"), email).list();
@@ -45,34 +49,26 @@ public class CheckoutResource {
 
         double subtotal = 0;
 
+        // 1. Validaciones y Cálculo
         for (var item : req.items) {
             Producto p = Producto.findById(item.productoId);
             if (p == null) return Response.status(400).entity("Producto no encontrado").build();
             if (p.stock < item.cantidad) return Response.status(400).entity("Sin stock: " + p.nombre).build();
 
-            // --- CORRECCIÓN DE PRECIOS (Oferta vs Mayoreo) ---
-            // 1. Precio Base: Si tiene oferta activa, ese es el base. Si no, el precio normal.
             double precioUnitario = p.precio;
-            if (p.enOferta && p.precioOferta > 0) {
-                precioUnitario = p.precioOferta;
-            }
+            if (p.enOferta && p.precioOferta > 0) precioUnitario = p.precioOferta;
 
-            // 2. Verificar Mayoreo (Si aplica por cantidad y es MEJOR que la oferta)
             PrecioMayoreo pm = PrecioMayoreo.find(
                     "producto.id = ?1 AND cantidadMin <= ?2 ORDER BY cantidadMin DESC",
                     p.id, item.cantidad
             ).firstResult();
 
-            if (pm != null && pm.precioUnitario < precioUnitario) {
-                precioUnitario = pm.precioUnitario;
-            }
-            // -------------------------------------------------
-
-            // Sumamos al subtotal real
+            if (pm != null && pm.precioUnitario < precioUnitario) precioUnitario = pm.precioUnitario;
+            
             subtotal += (precioUnitario * item.cantidad);
         }
 
-        // Calcular Cupón (si existe)
+        // 2. Cupones
         double descuento = 0;
         if (req.cupon != null && !req.cupon.isBlank()) {
             Cupon cupon = Cupon.find("codigo", req.cupon).firstResult();
@@ -84,9 +80,10 @@ public class CheckoutResource {
         double costoEnvio = req.costoEnvio > 0 ? req.costoEnvio : 0;
         double total = subtotal - descuento + costoEnvio;
 
-        // Guardar Pedido
+        // 3. Guardar Pedido
         Pedido pedido = new Pedido();
         pedido.usuario = usuario;
+        pedido.telefono = req.telefono; // <--- Importante para Twilio
         pedido.subtotal = subtotal;
         pedido.descuento = descuento;
         pedido.costoEnvio = costoEnvio;
@@ -98,7 +95,6 @@ public class CheckoutResource {
         pedido.coordenadas = req.coordenadas;
         pedido.paypalOrderId = req.paypalOrderId;
         
-        // Datos Fiscales
         pedido.tipoComprobante = req.tipoComprobante != null ? req.tipoComprobante : "CONSUMIDOR_FINAL";
         pedido.documentoFiscal = req.documentoFiscal;
         pedido.nrc = req.nrc;
@@ -107,7 +103,7 @@ public class CheckoutResource {
         
         pedido.persist();
 
-        // Guardar Items
+        // 4. Guardar Items y Restar Stock
         for (var item : req.items) {
             Producto p = Producto.findById(item.productoId);
             PedidoItem it = new PedidoItem();
@@ -115,7 +111,6 @@ public class CheckoutResource {
             it.producto = p;
             it.cantidad = item.cantidad;
             
-            // Recalcular precio individual para guardarlo en el historial
             double precioFinal = p.precio;
             if (p.enOferta && p.precioOferta > 0) precioFinal = p.precioOferta;
             
@@ -125,25 +120,44 @@ public class CheckoutResource {
             it.precioUnitario = precioFinal;
             it.persist();
 
-            // Restar Stock
             p.stock -= item.cantidad;
         }
         
-        // Aquí iría la notificación de WhatsApp si la activas en el backend
-        // notificarAdmin(pedido);
+        // 5. Notificación Twilio (Hilo Virtual)
+        Thread.ofVirtual().start(() -> {
+            twilioService.notificarPedidoAdmin(pedido);
+        });
 
         return Response.ok(Map.of("mensaje", "Pedido creado", "id", pedido.id, "total", total)).build();
     }
     
     @GET
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "SUPER_ADMIN"})
     public Response listarPedidos() {
-        return Response.ok(Pedido.listAll(Sort.descending("id"))).build();
+        String email = identity.getPrincipal().getName();
+        Usuario admin = Usuario.find("email", email).firstResult();
+
+        List<Pedido> pedidos;
+
+        if ("SUPER_ADMIN".equals(admin.role)) {
+            // El Dueño ve TODO
+            pedidos = Pedido.listAll(Sort.descending("id"));
+        } else {
+            // El Admin de Empresa solo ve pedidos que contengan SUS productos
+            if (admin.empresa == null) return Response.ok(List.of()).build();
+            
+            pedidos = Pedido.find(
+                "SELECT DISTINCT p FROM Pedido p JOIN p.items i WHERE i.producto.empresa.id = ?1 ORDER BY p.id DESC", 
+                admin.empresa.id
+            ).list();
+        }
+
+        return Response.ok(pedidos).build();
     }
     
     @GET
     @Path("/{id}")
-    @RolesAllowed({"USER", "ADMIN"})
+    @RolesAllowed({"USER", "ADMIN", "SUPER_ADMIN"})
     public Response obtenerPedido(@PathParam("id") Long id) {
         Pedido p = Pedido.findById(id);
         return p != null ? Response.ok(p).build() : Response.status(404).build();
@@ -152,7 +166,7 @@ public class CheckoutResource {
     @PUT
     @Path("/{id}/status")
     @Transactional
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "SUPER_ADMIN"})
     public Response cambiarEstado(@PathParam("id") Long id, Map<String,String> body) {
         Pedido p = Pedido.findById(id);
         if(p == null) return Response.status(404).build();

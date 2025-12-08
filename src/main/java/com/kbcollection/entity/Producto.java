@@ -18,16 +18,18 @@ public class Producto extends PanacheEntity {
     public double precioOferta;
     public boolean enOferta;
 
-    // --- VARIANTES (SÍ) ---
-    public String talla;            // Ej: "P", "M"
-    public String variante;         // Ej: "Lavanda"
-    public String codigoAgrupador;  // Ej: "HUGGIES-001"
-    // ----------------------
-
-    // (Sin Fardos)
+    public String talla;
+    public String variante;
+    public String codigoAgrupador;
 
     @ManyToOne
     public Category category;
+    
+    // --- RELACIÓN MULTI-EMPRESA ---
+    @ManyToOne
+    @JoinColumn(name = "empresa_id", nullable = false)
+    public Empresa empresa;
+    // -----------------------------
     
     @OneToMany(mappedBy = "producto", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     public List<PrecioMayoreo> preciosMayoreo = new ArrayList<>();

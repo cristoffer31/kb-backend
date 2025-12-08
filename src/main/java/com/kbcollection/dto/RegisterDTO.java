@@ -10,10 +10,12 @@ public class RegisterDTO {
     public String nombre;
 
     @NotBlank(message = "El email es obligatorio")
-    @Email(message = "El formato del email no es válido (ej: usuario@dominio.com)")
+    @Email(message = "El formato del email no es válido")
     public String email;
 
     @NotBlank(message = "La contraseña es obligatoria")
-    @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
+    @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
     public String password;
+    
+    public String telefono;
 }

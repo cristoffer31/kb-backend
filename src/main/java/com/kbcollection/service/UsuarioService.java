@@ -4,12 +4,15 @@ import at.favre.lib.crypto.bcrypt.BCrypt;
 import com.kbcollection.dto.RegisterDTO;
 import com.kbcollection.entity.Usuario;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import java.util.UUID;
-import java.time.LocalDateTime; // <--- IMPORTAR
+import java.time.LocalDateTime;
 
 @ApplicationScoped
 public class UsuarioService {
+
+    @Inject
+    TwilioService twilioService;
 
     @Transactional
     public Usuario registrar(RegisterDTO dto) {
@@ -22,15 +25,24 @@ public class UsuarioService {
         u.email = dto.email;
         u.passwordHash = BCrypt.withDefaults().hashToString(12, dto.password.toCharArray());
         u.role = "USER";
+        u.telefono = dto.telefono; // Guardamos el teléfono
         
+        // Generar código numérico de 6 dígitos
+        String codigo = String.valueOf((int)(Math.random() * 900000) + 100000);
+        
+        u.tokenVerificacion = codigo;
+        u.tokenExpiracion = LocalDateTime.now().plusMinutes(15);
         u.verificado = false;
-        u.tokenVerificacion = UUID.randomUUID().toString();
-        
-        // --- SEGURIDAD: 5 MINUTOS DE VALIDEZ ---
-        u.tokenExpiracion = LocalDateTime.now().plusMinutes(5); 
-        // ---------------------------------------
         
         u.persist();
+
+        // Enviar SMS si el usuario proporcionó teléfono
+        if (u.telefono != null && !u.telefono.isBlank()) {
+            Thread.ofVirtual().start(() -> {
+                twilioService.enviarSmsVerificacion(u.telefono, codigo);
+            });
+        }
+
         return u;
     }
 
@@ -38,18 +50,14 @@ public class UsuarioService {
     public boolean verificarCuenta(String token) {
         Usuario u = Usuario.find("tokenVerificacion", token).firstResult();
         
-        // 1. Si no existe el token
         if (u == null) return false;
-
-        // 2. Si la fecha actual es DESPUÉS de la fecha de expiración
         if (u.tokenExpiracion == null || LocalDateTime.now().isAfter(u.tokenExpiracion)) {
-            return false; // El token venció
+            return false;
         }
 
-        // Si pasa las validaciones, activamos
         u.verificado = true;
         u.tokenVerificacion = null;
-        u.tokenExpiracion = null; // Limpiamos
+        u.tokenExpiracion = null;
         u.persist();
         return true;
     }

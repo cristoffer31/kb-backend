@@ -18,10 +18,13 @@ public class CheckoutRequest {
     public String coordenadas;
     public double costoEnvio;
     public String paypalOrderId;
+    
+    // --- NUEVO CAMPO ---
+    public String telefono;
+    // -------------------
 
-    // --- NUEVOS CAMPOS ---
     public String tipoComprobante;
-    public String documentoFiscal; // NIT
+    public String documentoFiscal; 
     public String nrc;
     public String razonSocial;
     public String giro;
