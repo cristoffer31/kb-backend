@@ -1,16 +1,18 @@
 package com.kbcollection.entity;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
-import jakarta.persistence.Entity;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.*;
 
 @Entity
-public class CarouselImage extends PanacheEntity {
+public class CarouselImage extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    public Long id;
+
     public String imageUrl;
     public String titulo;
 
-    // --- NUEVO ---
     @ManyToOne
     @JoinColumn(name = "empresa_id", nullable = false)
     public Empresa empresa;

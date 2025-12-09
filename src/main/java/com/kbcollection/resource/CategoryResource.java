@@ -4,13 +4,11 @@ import com.kbcollection.dto.CategoryForm;
 import com.kbcollection.entity.Category;
 import com.kbcollection.entity.Empresa;
 import com.kbcollection.entity.Usuario;
+import jakarta.annotation.security.PermitAll; // <--- IMPORTAR
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.*;
 import java.util.List;
 
 @Path("/api/categorias")
@@ -19,17 +17,18 @@ import java.util.List;
 public class CategoryResource {
 
     @GET
+    @PermitAll // <--- PÚBLICO
     public List<Category> listar(@QueryParam("empresaId") Long empresaId) {
         if (empresaId != null) {
             return Category.find("empresa.id", empresaId).list();
         }
-        // Si no se filtra, devuelve vacío o todo (según prefieras)
-        // Para seguridad, mejor devolver vacío si no hay empresa
-        return List.of(); 
+        return Category.listAll(); 
     }
 
+    // ... (Métodos crear, actualizar, eliminar quedan igual con @RolesAllowed) ...
     @GET
     @Path("/{id}")
+    @PermitAll
     public Response obtener(@PathParam("id") Long id) {
         Category c = Category.findById(id);
         return c != null ? Response.ok(c).build() : Response.status(404).build();
@@ -41,19 +40,15 @@ public class CategoryResource {
     public Response crear(CategoryForm form, @Context SecurityContext sec) {
         String email = sec.getUserPrincipal().getName();
         Usuario admin = Usuario.find("email", email).firstResult();
-
         Category c = new Category();
         c.nombre = form.nombre;
         c.descripcion = form.descripcion;
         c.imagenUrl = form.imagenUrl;
-
-        // Asignar Empresa
         if (admin.empresa != null) {
             c.empresa = admin.empresa;
         } else {
-            c.empresa = Empresa.findById(1L); // Fallback a KB
+            c.empresa = Empresa.findById(1L);
         }
-
         c.persist();
         return Response.status(201).entity(c).build();
     }
@@ -65,11 +60,9 @@ public class CategoryResource {
     public Response actualizar(@PathParam("id") Long id, CategoryForm form) {
         Category c = Category.findById(id);
         if (c == null) return Response.status(404).build();
-
         c.nombre = form.nombre;
         c.descripcion = form.descripcion;
         c.imagenUrl = form.imagenUrl;
-        // La empresa NO se cambia al editar
         return Response.ok(c).build();
     }
 

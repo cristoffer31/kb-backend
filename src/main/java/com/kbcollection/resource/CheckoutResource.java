@@ -140,10 +140,9 @@ public class CheckoutResource {
         List<Pedido> pedidos;
 
         if ("SUPER_ADMIN".equals(admin.role)) {
-            // El Dueño ve TODO
             pedidos = Pedido.listAll(Sort.descending("id"));
         } else {
-            // El Admin de Empresa solo ve pedidos que contengan SUS productos
+            
             if (admin.empresa == null) return Response.ok(List.of()).build();
             
             pedidos = Pedido.find(

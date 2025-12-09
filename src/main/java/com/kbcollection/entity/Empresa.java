@@ -1,16 +1,20 @@
 package com.kbcollection.entity;
 
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
-import jakarta.persistence.Entity;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.*;
 
 @Entity
-public class Empresa extends PanacheEntity {
+public class Empresa extends PanacheEntityBase {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    public Long id;
+
     public String nombre;
-    public String slug;        // "kb", "kpbm", "sabesa"
+    public String slug;
     public String logoUrl;
     public String colorPrimario;
     
-    // Método helper para encontrar por ID de forma segura
     public static Empresa findById(Long id) {
         return find("id", id).firstResult();
     }

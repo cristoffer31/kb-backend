@@ -1,15 +1,18 @@
 package com.kbcollection.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore; // <--- 1. IMPORTAR
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
-import jakarta.persistence.Entity;
-import jakarta.persistence.ManyToOne;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.*;
 
 @Entity
-public class PedidoItem extends PanacheEntity {
+public class PedidoItem extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    public Long id;
 
     @ManyToOne
-    @JsonIgnore // <--- 2. AGREGAR ESTA LÍNEA (Rompe el bucle)
+    @JsonIgnore
     public Pedido pedido;
 
     @ManyToOne

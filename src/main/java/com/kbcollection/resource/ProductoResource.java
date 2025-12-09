@@ -2,13 +2,11 @@ package com.kbcollection.resource;
 
 import com.kbcollection.dto.ProductoForm;
 import com.kbcollection.entity.*;
+import jakarta.annotation.security.PermitAll; // <--- IMPORTANTE
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.*;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 
 import java.util.HashMap;
@@ -20,16 +18,15 @@ import java.util.Map;
 @Produces(MediaType.APPLICATION_JSON)
 public class ProductoResource {
 
-    // --- 1. LISTAR CON FILTRO DE EMPRESA ---
     @GET
+    @PermitAll // <--- AGREGADO: Permite ver productos sin login o con token
     public Response listar(@QueryParam("page") @DefaultValue("0") int page, 
                            @QueryParam("size") @DefaultValue("12") int size,
-                           @QueryParam("empresaId") Long empresaId) { // <--- NUEVO PARÁMETRO
+                           @QueryParam("empresaId") Long empresaId) {
         
         String query = "1=1";
         Map<String, Object> params = new HashMap<>();
 
-        // Si el frontend pide una empresa específica (ej: /kb), filtramos
         if (empresaId != null) {
             query += " AND empresa.id = :empresaId";
             params.put("empresaId", empresaId);
@@ -46,17 +43,19 @@ public class ProductoResource {
         )).build();
     }
 
-    // --- VARIANTES ---
+    // --- OTROS MÉTODOS PÚBLICOS ---
+    
     @GET
     @Path("/variantes/{codigo}")
+    @PermitAll
     public List<Producto> obtenerVariantes(@PathParam("codigo") String codigo) {
         if (codigo == null || codigo.isBlank()) return List.of();
         return Producto.find("codigoAgrupador", codigo).list();
     }
 
-    // --- 2. OFERTAS FILTRADAS ---
     @GET
     @Path("/ofertas")
+    @PermitAll
     public List<Producto> obtenerOfertas(@QueryParam("empresaId") Long empresaId) {
         if (empresaId != null) {
             return Producto.find("enOferta = true AND empresa.id = ?1", empresaId).list();
@@ -66,32 +65,50 @@ public class ProductoResource {
 
     @GET
     @Path("/{id}")
+    @PermitAll
     public Response obtener(@PathParam("id") Long id) {
         Producto p = Producto.findById(id);
         if (p == null) return Response.status(Response.Status.NOT_FOUND).build();
         return Response.ok(p).build();
     }
 
-    // --- 3. CREAR ASIGNANDO EMPRESA ---
+    @GET
+    @Path("/buscar")
+    @PermitAll
+    public Response buscar(@QueryParam("nombre") String nombre,
+                           @QueryParam("categoriaId") Long categoriaId,
+                           @QueryParam("empresaId") Long empresaId) {
+        String query = "1=1";
+        Map<String,Object> params = new HashMap<>();
+        
+        if (nombre != null && !nombre.isBlank()) {
+            query += " AND LOWER(nombre) LIKE :nombre";
+            params.put("nombre", "%" + nombre.toLowerCase() + "%");
+        }
+        if (categoriaId != null) {
+            query += " AND category.id = :categoriaId";
+            params.put("categoriaId", categoriaId);
+        }
+        if (empresaId != null) {
+            query += " AND empresa.id = :empresaId";
+            params.put("empresaId", empresaId);
+        }
+        
+        return Response.ok(Producto.list(query, params)).build();
+    }
+
+    // --- MÉTODOS DE ADMIN (ESTOS SÍ LLEVAN @RolesAllowed) ---
+    
     @POST
     @Transactional
     @RolesAllowed({"ADMIN", "SUPER_ADMIN"})
     public Response crear(ProductoForm form, @Context SecurityContext sec) {
-        // Identificar quién está creando el producto
         String email = sec.getUserPrincipal().getName();
         Usuario admin = Usuario.find("email", email).firstResult();
-        
         Producto p = new Producto();
         
-        // Lógica de Asignación Automática
-        if (admin.empresa != null) {
-            // Si el usuario es Admin de "Sabesa", el producto es de "Sabesa"
-            p.empresa = admin.empresa;
-        } else {
-            // Si es Super Admin (empresa null), asignamos KB por defecto o lo que venga en el form
-            // (Aquí podrías agregar lógica para que el Super Admin elija la empresa en el JSON)
-            p.empresa = Empresa.findById(1L); // Fallback a ID 1 (KB Collection)
-        }
+        if (admin.empresa != null) p.empresa = admin.empresa;
+        else p.empresa = Empresa.findById(1L);
 
         mapFormToEntity(form, p);
         p.persist();
@@ -105,9 +122,6 @@ public class ProductoResource {
     public Response actualizar(@PathParam("id") Long id, ProductoForm form) {
         Producto p = Producto.findById(id);
         if (p == null) return Response.status(Response.Status.NOT_FOUND).build();
-        
-        // Aquí podrías validar que el admin tenga permiso sobre esta empresa
-        
         mapFormToEntity(form, p);
         return Response.ok(p).build();
     }
@@ -122,34 +136,6 @@ public class ProductoResource {
         return Response.ok().build();
     }
 
-    @GET
-    @Path("/buscar")
-    public Response buscar(
-            @QueryParam("nombre") String nombre,
-            @QueryParam("categoriaId") Long categoriaId,
-            @QueryParam("empresaId") Long empresaId // <--- FILTRO EN BÚSQUEDA
-    ) {
-        String query = "1=1";
-        Map<String,Object> params = new HashMap<>();
-        
-        if (nombre != null && !nombre.isBlank()) {
-            query += " AND LOWER(nombre) LIKE :nombre";
-            params.put("nombre", "%" + nombre.toLowerCase() + "%");
-        }
-        if (categoriaId != null) {
-            query += " AND category.id = :categoriaId";
-            params.put("categoriaId", categoriaId);
-        }
-        // Filtro de empresa en buscador
-        if (empresaId != null) {
-            query += " AND empresa.id = :empresaId";
-            params.put("empresaId", empresaId);
-        }
-        
-        List<Producto> resultados = Producto.list(query, params);
-        return Response.ok(resultados).build();
-    }
-
     private void mapFormToEntity(ProductoForm form, Producto p) {
         p.nombre = form.nombre;
         p.descripcion = form.descripcion;
@@ -159,18 +145,12 @@ public class ProductoResource {
         p.imagenUrl = form.imagenUrl;
         p.precioOferta = form.precioOferta != null ? form.precioOferta : 0.0;
         p.enOferta = form.enOferta != null ? form.enOferta : false;
-
         p.talla = form.talla;
         p.variante = form.variante;
         p.codigoAgrupador = form.codigoAgrupador;
-
-        if (form.categoryId != null) {
-            p.category = Category.findById(form.categoryId);
-        } else {
-            p.category = null;
-        }
-
-        // Precios Mayoreo
+        if (form.categoryId != null) p.category = Category.findById(form.categoryId);
+        else p.category = null;
+        
         if (p.preciosMayoreo == null) p.preciosMayoreo = new java.util.ArrayList<>();
         else p.preciosMayoreo.clear();
         

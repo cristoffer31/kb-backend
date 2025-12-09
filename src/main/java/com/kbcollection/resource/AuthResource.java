@@ -59,13 +59,15 @@ public class AuthResource {
     @Path("/register")
     public Response register(@Valid RegisterDTO dto) {
         try {
+            // 1. Crear el usuario en base de datos
             Usuario u = usuarioService.registrar(dto);
-            // Intentar enviar correo, pero no fallar el registro si el correo falla (ya que
-            // el usuario ya se creó)
+
+            // 2. ENVIAR EL CORREO DE VERIFICACIÓN
+            // Lo hacemos en un try-catch para que si falla el correo, el usuario no pierda su registro
             try {
                 emailService.enviarVerificacion(u.email, u.tokenVerificacion);
             } catch (Exception e) {
-                // Loguear error de email silenciosamente o con logger real si existiera
+                System.out.println("Error enviando correo: " + e.getMessage());
             }
 
             return Response.status(Response.Status.CREATED)

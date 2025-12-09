@@ -3,13 +3,11 @@ package com.kbcollection.resource;
 import com.kbcollection.entity.CarouselImage;
 import com.kbcollection.entity.Empresa;
 import com.kbcollection.entity.Usuario;
+import jakarta.annotation.security.PermitAll; // <--- IMPORTAR
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.*;
 import java.util.List;
 
 @Path("/api/carousel")
@@ -18,11 +16,12 @@ import java.util.List;
 public class CarouselResource {
 
     @GET
+    @PermitAll // <--- PÚBLICO: Importante para que cargue la Home sin login
     public List<CarouselImage> listar(@QueryParam("empresaId") Long empresaId) {
         if (empresaId != null) {
             return CarouselImage.find("empresa.id", empresaId).list();
         }
-        return List.of(); 
+        return CarouselImage.listAll(); 
     }
 
     @POST
@@ -32,16 +31,13 @@ public class CarouselResource {
         if (img.imageUrl == null || img.imageUrl.isEmpty()) {
             return Response.status(400).build();
         }
-
         String email = sec.getUserPrincipal().getName();
         Usuario admin = Usuario.find("email", email).firstResult();
-
         if (admin.empresa != null) {
             img.empresa = admin.empresa;
         } else {
             img.empresa = Empresa.findById(1L);
         }
-
         img.persist();
         return Response.ok(img).build();
     }

@@ -16,33 +16,46 @@ public class EmailService {
     @Inject
     Logger log;
 
-    @ConfigProperty(name = "FRONTEND_URL", defaultValue = "http://localhost:5173")
+  @ConfigProperty(name = "FRONTEND_URL", defaultValue = "http://localhost:5173")
     String frontendUrl;
 
     @ConfigProperty(name = "twilio.admin-phone") // Usamos esto para saber a quién notificar admin
     String adminEmailDestino; 
 
     // 1. Verificación de Cuenta
-    public void enviarVerificacion(String email, String token) {
+  public void enviarVerificacion(String email, String token) {
         try {
+            // Limpiamos la URL por si tiene slash al final
             String baseUrl = frontendUrl.endsWith("/") ? frontendUrl.substring(0, frontendUrl.length() - 1) : frontendUrl;
+            
+            // Construimos el enlace al Frontend
             String link = baseUrl + "/verificar?token=" + token;
 
-            String html = "<div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>"
-                    + "<h1 style='color: #004aad;'>Bienvenido a KB Collection</h1>"
-                    + "<p>Gracias por registrarte. Para activar tu cuenta y acceder a todas las marcas (KB, KPBM, Sabesa), haz clic en el siguiente enlace:</p>"
-                    + "<br/>"
-                    + "<a href='" + link + "' style='background-color: #004aad; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;'>ACTIVAR MI CUENTA</a>"
-                    + "<br/><br/>"
-                    + "<p style='font-size: 12px; color: #777;'>Si no creaste esta cuenta, ignora este mensaje.</p>"
-                    + "</div>";
+            // Diseño HTML del correo
+            String html = """
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
+                    <h2 style="color: #004aad; text-align: center;">Bienvenido a KB Collection</h2>
+                    <p style="font-size: 16px; color: #333;">Gracias por registrarte en nuestra plataforma corporativa.</p>
+                    <p style="font-size: 16px; color: #333;">Para activar tu cuenta y comenzar a comprar, por favor confirma tu correo electrónico haciendo clic en el botón de abajo:</p>
+                    <br/>
+                    <div style="text-align: center;">
+                        <a href="%s" style="background-color: #004aad; color: white; padding: 15px 30px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 16px; display: inline-block;">VERIFICAR MI CUENTA</a>
+                    </div>
+                    <br/>
+                    <p style="font-size: 12px; color: #777; text-align: center;">Si no creaste esta cuenta, puedes ignorar este mensaje.</p>
+                </div>
+            """.formatted(link);
 
-            mailer.send(Mail.withHtml(email, "Activa tu cuenta - KB Collection Corporación", html));
+            // Enviar el correo
+            mailer.send(Mail.withHtml(email, "Verifica tu cuenta - KB Collection", html));
+            
             log.info("📧 Correo de verificación enviado a: " + email);
+
         } catch (Exception e) {
-            log.error("❌ Error enviando correo de verificación a " + email, e);
+            log.error("❌ Error enviando correo a " + email, e);
         }
     }
+
 
     // 2. Recuperación de Contraseña
     public void enviarRecuperacion(String email, String token) {
